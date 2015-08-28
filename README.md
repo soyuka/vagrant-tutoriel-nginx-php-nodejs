@@ -471,6 +471,21 @@ script 'install_composer' do
 end
 ```
 
+### Réinitialiser la box
+
+Pour réinitialiser la box vous pouvez utiliser la commande :
+
+```bash
+vagrant reload
+```
+
+Ou même complètement réinitialiser :
+
+```bash
+vagrant destroy
+vagrant up
+```
+
 ## 8. Resources :
         
 - [https://docs.chef.io/resource_examples.html][26] Bouts de codes utiles pour les recettes  
