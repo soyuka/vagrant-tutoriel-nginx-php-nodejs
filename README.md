@@ -15,7 +15,7 @@ Je suis un fan de la doctrine RTFM , et pour cause j'ajouterai souvent un lien v
 Pour en savoir plus allez faire un tour sur la [documentation de Vagrant][3].  
 La liste des commandes principales :  
   
-```
+```bash
 vagrant --help
 ```   
   
@@ -72,7 +72,7 @@ _[The sad state of sysadmin in the age of containers][14]_.
   
 Parenthèse fermée, j'ai la box qu'il nous faut : [debian/jessie64][15] et pour lancer la notre :  
   
-```   
+```bash
 vagrant init debian/jessie64
 ```   
   
@@ -80,13 +80,13 @@ Cette commande nous créé un fichier de configuration, le fameux "VagrantFile".
   
 /?\ Si vous êtes impatient, lancez la commande suivante pour télécharger la box et l'installer :  
 
-```
+```bash
 vagrant up
 ```
   
 Lorsqu'on aura édité les configurations il faudra utiliser la commande suivante pour provisioner à nouveau :  
 
-```
+```bash
 vagrant provision
 ```
   
@@ -94,7 +94,7 @@ vagrant provision
   
 Comme dit plus haut, nous allons utiliser Berkshelf, pour gérer les cookbooks Chef. Il faut donc installer le plugin :  
   
-```
+```bash
 vagrant plugin install vagrant-berkshelf
 ```
   
@@ -102,13 +102,13 @@ vagrant plugin install vagrant-berkshelf
   
 Ensuite, on ajoute un fichier de configuration contenant nos cookbooks :  
   
-```
+```bash
 vim Berksfile
 ```    
   
 Ajoutez-y la liste suivante :  
 
-```
+```ruby
 source 'https://supermarket.chef.io'
 
 cookbook 'apt'
@@ -286,7 +286,9 @@ end
 
 Pour le test on aura besoin d'un fichier php. Ici pas besoin d'un template on va simplement utiliser notre répertoire partagé ! Ajoutez dans le fichier `share/index.php` :  
 
-```php<?php phpinfo(); ?>```
+```php
+<?php phpinfo(); ?>
+```
 
 #### Aller plus loin :
 
