@@ -1,0 +1,486 @@
+Dans ce tutoriel nous allons créer un environnement de développement avec Vagrant. Nous allons y configurer nodejs et php avec nginx.
+
+[h]Disclaimer[/h]
+
+[justify]Si vous n'avez pas un minimum de connaissances linux ce tutoriel n'est malheureusement pas pour vous. Il s'adresse à un public avancé. 
+Je suis un fan de la doctrine [acronym=Read The Fucking Manual]RTFM [/acronym], et pour cause j'ajouterai souvent un lien vers la documentation lié à la tâche en cours. Utilisez ces liens à bon escient, ou juste par curiosité. Si vous exécutez ce tutoriel juste en faisant des copier/coller vous n'apprendrez pas grand chose.[/justify]
+
+[h]C'est quoi Vagrant ?[/h]
+
+[justify][url=https://www.vagrantup.com/]Vagrant[/url] est un logiciel multi plateforme qui permet de créer et configurer des environnement "reproductibles, portables et légers". Imaginez que c'est un outil de création de machines virtuelles. Le must c'est que Vagrant s'occupe de pleins de choses tout seul : réseau, dossier partagé nfs, providers, déploiements etc. Nous n'allons couvrir qu'une toute petite partie des features de Vagrant à savoir :
+- Ajouter des providers basiques
+- Utiliser chef solo avec [url=http://berkshelf.com/]Berkshelf[/url] (un gestionnaire de cookbooks)
+- Installer un plugin vagrant pour gérer les hosts (bon à savoir il existe une [url=https://github.com/mitchellh/vagrant/wiki/Available-Vagrant-Plugins]pléiade de plugins[/url])[/justify]
+
+Pour en savoir plus allez faire un tour sur la [url=https://docs.vagrantup.com/v2/]documentation de Vagrant[/url].
+La liste des commandes principales :
+
+[code]
+vagrant --help
+[/code]
+
+[h]C'est quoi Chef ?[/h]
+
+[justify][url=https://www.chef.io/]Chef[/url] est ce que Vagrant appelle un "Provisionner". En gros, c'est un outil (super ultra trop beaucoup puissant) qui permet d'installer et de configurer des environnements. Nous pouvons le comparer avec son homonyme [url=https://puppetlabs.com/]Puppet[/url], voir le système plus léger qu'est [url=http://www.ansible.com/home]Ansible[/url]. 
+Chef est très (trop ?) puissant. Je trouve que quand on essaie de comprendre son fonctionnement sans contexte c'est très difficile et peut en freiner beaucoup. Ici nous allons utiliser [url=https://docs.chef.io/chef_solo.html]chef-solo[/url] ([url=http://docs.vagrantup.com/v2/provisioning/chef_solo.html]documentation vagrant[/url]). C'est une version open source du client Chef qui peut être installé localement (sans serveur Chef). Il va nous servir à profiter de quelques 2416 recettes (plus communément appelées "cookbooks"). 
+[/justify]
+
+[h]À quoi ça sert tout ça ?[/h]
+
+[justify]Grâce à Vagrant vous pouvez ensuite partager votre box, box qui n'est conçue que de fichiers de configuration. Très pratique quand plusieurs développeurs veulent avoir le même environnement sur lequel travailler. Ou par exemple pour lancer des tests sur Debian, ubuntu et centos en même temps depuis une seule machine avec une seule configuration ! 
+De plus les instructions qui suivent devraient être les mêmes sous linux, windows et osx !
+[/justify]
+Maintenant que nous sommes dans le bain, ou plutôt la soupe, nous allons établir un plan d'action. 
+
+[h]À l'attaque ![/h]
+
+[b]Nos besoins :[/b]
+
+- Debian
+- Nodejs
+- Php
+- Nginx
+
+[b]Nos prérequis :[/b]
+
+- [url=https://www.vagrantup.com/downloads.html]Installer Vagrant[/url]
+- [url=https://www.virtualbox.org/wiki/Downloads]Installer VirtualBox[/url]
+- [url=https://downloads.chef.io/chef-dk/]Installer ChefDK (development kit)[/url]
+
+[b]Plan :[/b]
+
+1. Créér une box de base
+2. Instancier nos cookbooks avec Berkshelf
+3. Mettre en place le cookbook perso
+4. Configurer Vagrant avec le Vagrantfile
+5. Observer la magie à l'oeuvre
+6. Cerise sur le gâteau
+7. Trucs et astuces
+8. Ressources
+
+[h]1. Créer une box de base[/h]
+
+/?\ Au préalable placez vous dans un répertoire de travail
+
+Pour ce faire direction [url=https://atlas.hashicorp.com/boxes/search]Vagrant boxes[/url]. C'est la liste officielle de Vagrant. Il existe d'autres sites du genre (ex :[url]http://www.vagrantbox.es/[/url]). Attention n'utilisez pas n'importe laquelle sans au préalable vérifier ce qu'elle contient ! 
+
+Ca me rappelle d'ailleurs un bon article sur les conteneurs (ou box):
+
+[quote]
+And since nobody is still able to compile things from scratch, [b]everybody just downloads precompiled binaries from random websites[/b]. Often [b]without any authentication or signature[/b].
+NSA and virus heaven. [b]You don't need to exploit any security hole anymore.[/b] Just make an "app" or "VM" or "Docker" image, and have people load your malicious binary to their network.
+[/quote]
+[i][url=http://www.vitavonni.de/blog/201503/2015031201-the-sad-state-of-sysadmin-in-the-age-of-containers.html]The sad state of sysadmin in the age of containers[/url][/i].
+
+Parenthèse fermée, j'ai la box qu'il nous faut : [url=https://atlas.hashicorp.com/debian/boxes/jessie64]debian/jessie64[/url] et pour lancer la notre :
+
+[code]
+vagrant init debian/jessie64
+[/code]
+
+Cette commande nous créé un fichier de configuration, le fameux "VagrantFile". Eh oui c'est tout, je sens beaucoup de déception. Pas d'inquiétude ce n'est que le commencement, la magie ne se fera pas longtemps attendre.
+
+/?\ Si vous êtes impatient, lancez la commande suivante pour télécharger la box et l'installer :
+[code]
+vagrant up
+[/code]
+
+Lorsqu'on aura édité les configurations il faudra utiliser la commande suivante pour provisioner à nouveau :
+[code]
+vagrant provision
+[/code]
+
+[h]2. Instancier nos cookbooks avec Berkshelf[/h] 
+
+Comme dit plus haut, nous allons utiliser Berkshelf, pour gérer les cookbooks Chef. Il faut donc installer le plugin :
+
+[code]
+vagrant plugin install vagrant-berkshelf
+[/code]
+
+/!\ Vous aurez besoin de [url=https://downloads.chef.io/chef-dk/]ChefDK[/url] pour l'installer
+
+Ensuite, on ajoute un fichier de configuration contenant nos cookbooks :
+
+[code]
+vim Berksfile
+[/code]
+
+Ajoutez-y la liste suivante :
+
+[code]
+source 'https://supermarket.chef.io'
+
+cookbook 'apt'
+cookbook 'build-essential'
+cookbook 'nvm'
+cookbook 'php'
+cookbook 'nginx'
+cookbook 'perso', path: './cookbook'
+[/code]
+
+Vous trouverez les cookbooks sur le [url=https://supermarket.chef.io/cookbooks]supermarché Chef[/url]. Voir aussi les  [url=https://github.com/opscode-cookbooks]"officiels"[/url].
+Notez le dernier cookbook, il représente le chemin où nous allons placer nos recettes perso :).
+
+[h]3. Créer un cookbook perso[/h]
+
+Nous allons créer une petite structure avec des cookbooks chef. Ils seront très basiques et écris en ruby (comme l'est le Vagrantfile d'ailleurs).
+
+[b]Créer la structure globale :[/b]
+
+[code]
+#share sera notre répertoire partagé
+mkdir -p cookbook/recipes cookbook/templates/default share
+touch cookbook/Berksfile cookbook/metadata.rb
+[/code]
+
+/!\ Celle-ci n'est qu'un exemple, c'est une structure basique d'un cookbook chef ([url]https://docs.chef.io/index.html#Cookbooks[/url]).
+
+Dans le "metadata.rb" nous aurons quelque chose comme ca :
+
+[code]
+name 'perso'
+maintainer 'soyuka'
+maintainer_email 'trucmuche@gmail.com'
+description 'Une super box vagrant de la mort qui tue'
+version '1.0.0'
+
+recipe 'perso', 'Mon cookbook perso'
+
+depends 'apt'
+depends 'nvm'
+depends 'nginx'
+depends 'php'
+
+%W{ debian ubuntu }.each do |os|
+  supports os
+end
+[/code]
+
+Dans le Berksfile :
+
+[code]
+source 'https://supermarket.chef.io'
+
+metadata #il va lire notre metadata
+[/code]
+
+[b]Recette pour nos paquets :[/b]
+
+Première recette toute basique qui va nous servir à installer des paquets depuis la configuration.
+
+La configuration est en fait la configuration chef que nous allons créer dans notre Vagrantfile. Chaque nœud de celle-ci se retrouve ensuite dans la variable globale "node".
+
+Créez le fichier [b]cookbook/recipes/packages.rb[/b] avec comme contenu :
+
+[code]
+include_recipe 'apt'
+
+# Pour chaque paquet on l'installe (apt-get install [paquet])
+node['perso']['packages'].each do |a_package|
+  package a_package
+end
+[/code]
+
+[b]Recette pour nodejs (via nvm) :[/b]
+
+Dans le fichier [b]cookbook/recipes/nodejs.rb[/b] :
+
+[code]
+include_recipe 'nvm'
+
+nvm_install 'v0.12.7' do
+  user 'vagrant'
+  group 'vagrant'
+  from_source false
+  alias_as_default true
+  action :create
+end
+
+# Pour chaque paquet `npm install -g [paquet]`
+node['perso']['npm_packages'].each do |n_package|
+  script n_package do 
+    interpreter 'bash'
+    cwd '/home/vagrant'
+    code "su vagrant -l -c 'npm install #{n_package} -g'"
+    # Ne pas installer si déjà présent
+    not_if "su vagrant -l -c 'npm list --depth=0 -g #{n_package}'"
+  end
+end
+[/code]
+
+[b]Recette pour php-fpm :[/b]
+
+Dans [b]cookbook/recipes/php.rb[/b] :
+
+[code]
+include_recipe 'php'
+
+php_fpm_pool 'default' do
+  action :install
+end
+
+# Php met à jour uniquement la directive dans /etc/php5/cli/php.ini
+# https://github.com/opscode-cookbooks/php/issues/116
+script 'copy_php.ini' do
+  interpreter 'bash'
+  code <<-EOH
+    cp /etc/php5/cli/php.ini /etc/php5/fpm/php.ini
+  EOH
+  only_if { ::File.exist?('/etc/php5/cli/php.ini') }
+end
+[/code]
+
+[b]Recette pour nginx :[/b]
+
+Ajoutons d'abord notre template de vhost dans [b]cookbook/templates/default/nginx/perso[/b] :
+
+[code]
+server {
+        listen 80;
+        listen [::]:80 ipv6only=on;
+        
+        root /var/www/perso;
+
+        server_name localhost;
+        index index.php;
+        access_log /var/log/nginx/perso-access.log;
+        error_log /var/log/nginx/perso-error.log notice;
+
+
+        location ~ \.php$ {
+                try_files $uri =404;
+                fastcgi_pass unix:/var/run/php5-fpm.sock;
+                fastcgi_index index.php;
+                fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+                include /etc/nginx/fastcgi_params;
+        }
+}
+[/code]
+
+/?\ Il est possible d'ajouter des variables à ce genre de templates, [url=https://github.com/scotch-io/Vagrant-LAMP-Stack/blob/master/site-cookbooks/app/templates/default/web_app.conf.erb]un exemple avec un vhost apache[/url].
+
+Dans [b]cookbook/recipes/nginx.rb[/b] :
+
+[code]
+include_recipe "nginx"
+
+# On utilise notre template
+template '/etc/nginx/sites-available/perso' do
+  source 'nginx/perso'
+end
+
+nginx_site 'perso' do
+  enable true
+  notifies :restart, 'service[nginx]'
+end
+
+# J'ai un bug avec le restart mais stop/start fonctionne bien :)
+service 'php5-fpm' do
+  action :stop
+  action :start
+end
+[/code]
+
+Pour le test on aura besoin d'un fichier php. Ici pas besoin d'un template on va simplement utiliser notre répertoire partagé ! Ajoutez dans le fichier [b]share/index.php[/b] :
+
+[code]
+<?php phpinfo(); ?>
+[/code]
+
+[b]Aller plus loin :[/b]
+
+/?\ Vous pouvez aisément ajouter des recettes "inline" via le shell dans le Vagrantfile. Pour ce faire il suffit d'utiliser des "shell provisioners" ([url=https://docs.vagrantup.com/v2/provisioning/shell.html]documentation[/url]), par exemple :
+
+[code]
+config.vm.provision :shell, :inline => "apt-get update"
+[/code]
+
+Bien entendu celui-ci est inutile car le cookbook [i]apt[/i] se charge déjà de ca pour nous !
+
+[h]4. Configurer Vagrant avec le Vagrantfile[/h]
+
+Voici ma config, lisez les commentaires et modifiez la ram utilisée (surtout si vous avez en dessous de 4gb de libre pour la vm :P).
+
+[code]
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# Ici je met des paramètres 'globaux' (pour plus tard)
+ip_address = '192.168.33.10'
+project_name = 'perso'
+
+Vagrant.configure(2) do |config|
+  config.vm.box = 'debian/jessie64'
+  # Vagrant va chercher sur l'url officielle de base mais c'est ici que vous pouvez mettre des box custom
+  config.vm.box_url = 'debian/jessie64'
+
+  # Le répertoire partagé (magie, ou presque...)
+  config.vm.synced_folder './share', '/var/www/perso/', :mount_options => ['dmode=777', 'fmode=666']
+
+  config.vm.provider 'virtualbox' do |vb|
+   # Ici on demande à Vagrant de nous ouvrir la VirtualBox, pratique pour vérifier que le boot s'effectue bien
+   # Si on déploie ou partage la box on peut aisément le désactiver
+    vb.gui = true 
+   # Mettez max 1/4 de votre ram au cas où, plus pourrait nuire à votre système
+    vb.memory = '4024'
+    # d'autres options : https://docs.vagrantup.com/v2/virtualbox/configuration.html
+  end
+
+  # Activation de berkshelf
+  config.berkshelf.enabled = true
+
+  # Setup de l'ip par rapport aux paramètres globaux
+  config.vm.hostname = project_name + '.local'        
+  config.vm.network :private_network, ip: ip_address
+
+  # Enfin notre configuration chef pour les recettes !
+  config.vm.provision :chef_solo do |chef|
+    # Ici on appelle nos cookbooks chef :)
+    chef.add_recipe 'apt'
+    # toujours utile car on pourrait avoir besoin de compiler une extension php par exemple
+    chef.add_recipe 'build-essential'
+    chef.add_recipe 'perso::packages'
+    chef.add_recipe 'perso::nodejs'
+    chef.add_recipe 'perso::php'
+    chef.add_recipe 'perso::nginx'
+    
+    # La c'est la configuration des paquets dont je parle plus haut (variable node)
+    chef.json = {
+      :perso => {
+        :packages => %W{ vim git curl httpie jq }, # Mettez ceux que vous voulez :)
+        :npm_packages => %W{ gulp mocha bower pm2 }
+      },
+      :php => {
+         # On ajoute ca au .ini (voir https://github.com/opscode-cookbooks/php#attributes)
+        :directives => {
+          'date.timezone' => 'Europe/Paris'
+        },
+        :fpm_user => 'vagrant',
+        :fpm_group => 'vagrant'
+      },
+      :nginx => {
+        :user => 'vagrant',
+        :default_site_enabled => false,
+        :sendfile => 'off' # à cause d'un bug de VirtualBox
+      }
+    }
+  end
+end
+[/code]
+
+[h]5. Observer la magie à l'oeuvre[/h]
+
+Lancez votre vagrant :
+
+[code]
+vagrant up
+[/code]
+
+Quand c'est fini, ouvrez "http://192.168.33.10/" sur votre navigateur, vous devriez voir le [i]phpinfo[/i] !
+
+Même pas besoin de se connecter à la box pour modifier les fichiers, utilisez votre éditeur préféré dans notre dossier [b]share[/b] :D.
+
+Si vous voulez faire des vérifications, ou rapidement vérifier qu'un changement de configuration fonctionnera au prochain [i]vagrant provision[/i], vous pouvez vous connecter en ssh avec :
+
+[code]
+vagrant ssh
+#puis on peut vérifier que tout est bien installé par ex :
+node -v
+pm2 -v
+[/code]
+
+[h]6. La cerise sur le gâteau[/h]
+
+Si on veut gérer plusieurs box, où même par question de simplicité, avoir une gestion des hosts serait un plus non négligeable !
+La bonne nouvelle c'est que ca existe en plugin Vagrant :D !
+
+[code]
+vagrant plugin install vagrant-hostmanager
+[/code]
+
+Éditons le VagrantFile afin de remplacer juste après [i]config.berkshelf.enabled[/i] :
+
+[code]
+# Configuration du host manager
+config.hostmanager.enabled = true
+config.hostmanager.manage_host = true
+
+# Setup de l'ip par rapport aux paramètres globaux
+config.vm.hostname = project_name + '.local'        
+config.vm.network :private_network, ip: ip_address
+config.hostmanager.aliases = [ "www." + project_name + ".local" ]
+
+config.vm.provision :hostmanager
+[/code]
+
+Il suffit maintenant de provisionner à nouveau la box :
+
+[code]
+vagrant provision
+[/code]
+
+Et maintenant vous avez accès à la box sur "http://perso.local" !
+
+/?\ Pour ne pas avoir à saisir de mot de passe lorsque vagrant modifie votre fichier [b]hosts[/b] utilisez [url=https://github.com/smdahlen/vagrant-hostmanager#passwordless-sudo]cette astuce[/url]
+
+[h]7. Trucs et astuces[/h]
+
+[b]Dotdeb pour debian 7[/b]
+
+Je ne sais pas vous mais moi j'aime php 5.4, sa notation de tableaux raccourcie et son serveur de développement intégré. Et vu qu'ils nous en faut toujours plus on veut la version php 5.5 !
+Sur Debian 7, elles ne sont pas dans les dépôts par défaut, mais on peut ajouter dotdeb :).
+
+Le cookbook ressemble à ca :
+
+[code]
+include_recipe "apt"
+
+apt_repository "dotdeb-php55" do
+  uri "http//packages.dotdeb.org"
+  distribution "wheezy-php55"
+  components ["all"]
+  key "http//www.dotdeb.org/dotdeb.gpg"
+end
+[/code]
+
+Nous ne pouvions faire plus simple. Ici, on utilise la fonction [url=https://github.com/opscode-cookbooks/apt#apt_repository]apt_repository du cookbook apt[/url]. Cookbook qu'on a ajouté avant à notre Berksfile :).
+
+[b]Bug de nfs avec Apache/Nginx et VirtualBox[/b]
+
+Il y a un bug avec VirtualBox et les fichiers statiques (cache ou que sais-je [url=http://stackoverflow.com/questions/9479117/vagrant-virtualbox-apache2-strange-cache-behaviour]voir là[/url]). Pour le fixer ajoutez les directives suivantes en fonction de votre serveur web :
+
+Apache :
+[code]
+EnableSendfile off
+[/code]
+
+Nginx :
+[code]
+sendfile off
+[/code]
+
+[b]Installer composer[/b]
+
+Pour ce faire, le script est une bonne solution :
+
+[code]
+script 'install_composer' do
+        interpreter "bash"
+        code <<-EOH
+        curl -s https://getcomposer.org/installer | php
+        mv composer.phar /usr/local/bin/composer && chmod +x /usr/local/bin/composer
+        EOH
+        not_if { ::File.exists?("/usr/local/bin/composer")}
+end
+[/code]
+
+[h]8. Resources :[/h]
+
+- [url]https://docs.chef.io/resource_examples.html[/url] Bouts de codes utiles pour les recettes
+- [url]https://scotch.io/tutorials/get-vagrant-up-and-running-in-no-time[/url] C'est le tuto qui m'a le plus aidé pour comprendre les bases
+- [url]https://github.com/scotch-io/Vagrant-LAMP-Stack/[/url] fork de [url]https://github.com/MiniCodeMonkey/Vagrant-LAMP-Stack[/url] De bonnes idées de structures même s'il faut forcément repasser derrière pour en avoir un à sa sauce
+- [url]http://stackoverflow.com/questions/9479117/vagrant-virtualbox-apache2-strange-cache-behaviour[/url] Bug de Virtualbox avec [i]sendfile on;[/i]
+- [url]https://supermarket.chef.io/cookbooks[/url] Le supermarché où vous trouverez les documentations pour les cookbooks utilisés dans le tuto (nginx, php, nvm)
+- [url]https://docs.vagrantup.com/v2/[/url] La documentation de vagrant
+- [url]https://github.com/mitchellh/vagrant/wiki/Available-Vagrant-Plugins[/url] Liste de plugins vagrant

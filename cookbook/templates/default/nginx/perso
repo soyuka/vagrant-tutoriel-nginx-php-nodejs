@@ -1,0 +1,20 @@
+server {
+        listen 80;
+        listen [::]:80 ipv6only=on;
+        
+        root /var/www/perso;
+
+        server_name localhost;
+        index index.php;
+        access_log /var/log/nginx/perso-access.log;
+        error_log /var/log/nginx/perso-error.log notice;
+
+
+        location ~ \.php$ {
+                try_files $uri =404;
+                fastcgi_pass unix:/var/run/php5-fpm.sock;
+                fastcgi_index index.php;
+                fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+                include /etc/nginx/fastcgi_params;
+        }
+}
