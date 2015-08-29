@@ -1,17 +1,24 @@
+Écrit à l'origine pour la communauté de [MonDedié](http://mondedie.fr/viewtopic.php?id=7086).
+
 Dans ce tutoriel nous allons créer un environnement de développement avec Vagrant. Nous allons y configurer nodejs et php avec nginx.  
-  
-## Disclaimer
+
+## Introduction
+
+### Disclaimer
   
 Si vous n'avez pas un minimum de connaissances linux ce tutoriel n'est malheureusement pas pour vous. Il s'adresse à un public avancé.   
 Je suis un fan de la doctrine RTFM , et pour cause j'ajouterai souvent un lien vers la documentation lié à la tâche en cours. Utilisez ces liens à bon escient, ou juste par curiosité. Si vous exécutez ce tutoriel juste en faisant des copier/coller vous n'apprendrez pas grand chose.  
+Retrouvez aussi ce tutoriel et le code complet sur [github](https://github.com/soyuka/vagrant-tutoriel-nginx-php-nodejs) !
+
+### C'est quoi Vagrant ?
   
-## C'est quoi Vagrant ?
-  
-[Vagrant][0] est un logiciel multi plateforme qui permet de créer et configurer des environnement "reproductibles, portables et légers". Imaginez que c'est un outil de création de machines virtuelles. Le must c'est que Vagrant s'occupe de pleins de choses tout seul : réseau, dossier partagé nfs, providers, déploiements etc. Nous n'allons couvrir qu'une toute petite partie des features de Vagrant à savoir :  
-- Ajouter des providers basiques  
-- Utiliser chef solo avec [Berkshelf][1] (un gestionnaire de cookbooks)  
-- Installer un plugin vagrant pour gérer les hosts (bon à savoir il existe une [pléiade de plugins][2])  
-  
+[Vagrant][0] est un logiciel multi plateforme qui permet de créer et configurer des environnement "reproductibles, portables et légers". Imaginez que c'est un outil de création de machines virtuelles. Le must c'est que Vagrant s'occupe de pleins de choses tout seul : réseau, dossier partagé nfs, *provisioner* (ie: shell, ansible, chef), déploiements etc.
+
+Nous allons utiliser vagrant afin :   
+
+- d'utiliser le "provisioner" chef solo et [Berkshelf][1] (un gestionnaire de *cookbooks*)
+- de gérer les hosts avec le plugin HostManager (bon à savoir il existe une [pléiade de plugins][2])
+
 Pour en savoir plus allez faire un tour sur la [documentation de Vagrant][3].  
 La liste des commandes principales :  
   
@@ -19,16 +26,19 @@ La liste des commandes principales :
 vagrant --help
 ```   
   
-## C'est quoi Chef ?
-  
+### C'est quoi Chef ?
+
 [Chef][4] est ce que Vagrant appelle un "Provisionner". En gros, c'est un outil (super ultra trop beaucoup puissant) qui permet d'installer et de configurer des environnements. Nous pouvons le comparer avec son homonyme [Puppet][5], voir le système plus léger qu'est [Ansible][6].   
-Chef est très (trop ?) puissant. Je trouve que quand on essaie de comprendre son fonctionnement sans contexte c'est très difficile et peut en freiner beaucoup. Ici nous allons utiliser [chef-solo][7] ([documentation vagrant][8]). C'est une version open source du client Chef qui peut être installé localement (sans serveur Chef). Il va nous servir à profiter de quelques 2416 recettes (plus communément appelées "cookbooks").   
+Chef est très (trop ?) puissant. Je trouve que quand on essaie de comprendre son fonctionnement sans contexte c'est très difficile et peut en freiner beaucoup. Ici nous allons utiliser [chef-solo][7] ([documentation vagrant][8]). C'est une version open source du client Chef qui peut être installé localement (sans serveur Chef). Il va nous servir à profiter de quelques 2416 recettes (plus communément appelées "cookbooks").
+
+Chef va servir à installer ici tout ce dont on a besoin (nodejs, php, nginx).
+
+### À quoi ça sert tout ça ?
   
-  
-## À quoi ça sert tout ça ?
-  
-Grâce à Vagrant vous pouvez ensuite partager votre box, box qui n'est conçue que de fichiers de configuration. Très pratique quand plusieurs développeurs veulent avoir le même environnement sur lequel travailler. Ou par exemple pour lancer des tests sur Debian, ubuntu et centos en même temps depuis une seule machine avec une seule configuration !   
-De plus les instructions qui suivent devraient être les mêmes sous linux, windows et osx !  
+Grâce à Vagrant vous pouvez ensuite partager votre box, box qui n'est conçue que de fichiers de configuration. Très pratique quand plusieurs développeurs veulent avoir le même environnement sur lequel travailler. Ou par exemple pour lancer des tests sur Debian, ubuntu et centos en même temps depuis une seule machine avec une seule configuration ! 
+Il est très pratique quand on veut garder un système propre. Par exemple d'installer des bases de données sur son ordinateur (postgres, mysql, redis, memcached etc). Ou encore de batailler avec nginx et apache qui se chevauchent suivies d'un reste de lighthttpd.
+
+De plus les instructions qui suivent devraient être les mêmes sous linux, windows et osx !
   
 Maintenant que nous sommes dans le bain, ou plutôt la soupe, nous allons établir un plan d'action.   
   
@@ -46,17 +56,17 @@ Maintenant que nous sommes dans le bain, ou plutôt la soupe, nous allons établ
 - [Installer Vagrant][9]  
 - [Installer VirtualBox][10]  
 - [Installer ChefDK (development kit)][11]  
-  
+
 ### Plan :
   
-1. Créér une box de base  
-2. Instancier nos cookbooks avec Berkshelf  
-3. Mettre en place le cookbook perso  
-4. Configurer Vagrant avec le Vagrantfile  
-5. Observer la magie à l'oeuvre  
-6. Cerise sur le gâteau  
-7. Trucs et astuces  
-8. Ressources  
+1. [Créer une box de base](#1creruneboxdebase)
+2. [Instancier nos cookbooks avec Berkshelf](#2instanciernoscookbooksavecberkshelf)
+3. [Mettre en place le cookbook perso](#3mettreenplacelecookbookperso) 
+4. [Configurer Vagrant avec le Vagrantfile](#4configurervagrantaveclevagrantfile)
+5. [Observer la magie à l'oeuvre](#5observerlamagiealoeuvre)
+6. [Cerise sur le gâteau](#6cerisesurlegateau)
+7. [Trucs et astuces](#7trucsetastuces)
+8. [Ressources](#8ressources)
   
 ## 1. Créer une box de base
   
@@ -66,10 +76,12 @@ Pour ce faire direction [Vagrant boxes][12]. C'est la liste officielle de Vagran
   
 Ca me rappelle d'ailleurs un bon article sur les conteneurs (ou box):  
 
-> And since nobody is still able to compile things from scratch, **everybody just downloads precompiled binaries from random websites**. Often **without any authentication or signature**. NSA and virus heaven. **You don't need to exploit any security hole anymore.** Just make an "app" or "VM" or "Docker" image, and have people load your malicious binary to their network.
+> And since nobody is still able to compile things from scratch, **everybody just downloads precompiled binaries from random websites**. Often **without any authentication or signature**. 
+
+> NSA and virus heaven. **You don't need to exploit any security hole anymore**. Just make an "app" or "VM" or "Docker" image, and have people load your malicious binary to their network.
 
 _[The sad state of sysadmin in the age of containers][14]_.  
-  
+
 Parenthèse fermée, j'ai la box qu'il nous faut : [debian/jessie64][15] et pour lancer la notre :  
   
 ```bash
@@ -84,7 +96,7 @@ Cette commande nous créé un fichier de configuration, le fameux "VagrantFile".
 vagrant up
 ```
   
-Lorsqu'on aura édité les configurations il faudra utiliser la commande suivante pour provisioner à nouveau :  
+Lorsqu'on aura édité les configurations il faudra utiliser la commande suivante pour provisionner à nouveau :  
 
 ```bash
 vagrant provision
@@ -104,8 +116,8 @@ Ensuite, on ajoute un fichier de configuration contenant nos cookbooks :
   
 ```bash
 vim Berksfile
-```    
-  
+```
+
 Ajoutez-y la liste suivante :  
 
 ```ruby
